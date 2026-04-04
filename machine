@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+(
+    hostname;               echo "";
+    hostnamectl;            echo "";
+    timedatectl;            echo "";
+    uname -a;               echo "";
+    ldd --version;          echo "";
+    cat /etc/os-release;    echo "";
+    free -h;                echo "";
+    df -h;                  echo "";
+    lspci;                  echo "";
+    systemd --version;      echo "";
+    lsblk;                  echo "";
+    id;                     echo "";
+    cat /etc/resolv.conf;   echo "";
+)
