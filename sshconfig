@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+
+
+proxy="${1:-replaceit}"
+
+cat<<<"cat ~/.ssh/config<<EOF"
+
+cat<<EOF
+Host github.com
+  HostName github.com
+  Port 22
+  User git
+  ProxyCommand nc -X connect -x ${proxy} %h %p
+
+Host *
+  StrictHostKeyChecking no
+  UserKnownHostsFile /dev/null
+  ServerAliveInterval 60
+  ServerAliveCountMax 30
+EOF
+
+cat<<<"EOF"
