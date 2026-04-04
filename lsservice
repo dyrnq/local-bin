@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+
+systemctl list-units --no-pager --type service
+
+# --state=active
+# --state=running
+# --state=exited
+
+
+
