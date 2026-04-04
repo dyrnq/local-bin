@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+if ! test -f ~/.ssh/id_ed25519.pub; then
+    ssh-keygen -t ed25519 -N '' <<<$'\ny\n'
+    cat ~/.ssh/id_ed25519.pub >> ~/.ssh/authorized_keys
+fi
+if ! test -f ~/.ssh/id_rsa.pub; then
+    ssh-keygen -t rsa -b 4096 -N '' <<<$'\ny\n'
+    cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
+fi
