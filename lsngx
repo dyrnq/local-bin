@@ -1,0 +1,47 @@
+#!/bin/bash
+
+
+# ==========================================================
+# 0. 权限检查：必须为 root 用户才能运行
+# ==========================================================
+if [ "$EUID" -ne 0 ]; then
+    echo "错误：此脚本需要 root 权限才能通过 'ss -p' 获取进程 PID 关联。"
+    echo "请使用 'sudo $0' 或以 root 身份运行。"
+    exit 1
+fi
+
+# 1. 检查是否有 nginx 进程在运行
+NGINX_PIDS=$(ps aux | grep "[n]ginx" | awk '{print $2}' | tr '\n' ',' | sed 's/,$//')
+
+if [ -z "$NGINX_PIDS" ]; then
+    echo "未发现运行中的 nginx 进程。"
+    exit 0
+fi
+
+# 2. 打印表头
+printf "%-10s %-10s %-15s %-20s %-s\n" "Protocol" "Local Port" "Process ID" "Interface" "Service"
+echo "---------------------------------------------------------------------------------------"
+
+# 3. 使用 ss 查找这些 PID 关联的端口
+# -t (tcp) -u (udp) -n (numeric) -l (listening) -p (process)
+# 我们过滤包含 "nginx" 字符串的监听行
+ss -tunlp | grep "nginx" | while read -r line; do
+    # 提取协议 (tcp/udp)
+    proto=$(echo "$line" | awk '{print $1}')
+    
+    # 提取本地地址和端口 (例如 0.0.0.0:80 或 [::]:443)
+    local_addr=$(echo "$line" | awk '{print $5}')
+    port=$(echo "$local_addr" | awk -F':' '{print $NF}')
+    iface=$(echo "$local_addr" | sed "s/:$port$//")
+
+    # 提取 PID (ss 的输出格式通常是 users:(("nginx",pid=1234,fd=5)))
+    pid=$(echo "$line" | grep -oP 'pid=\K[0-9]+' | head -n 1)
+
+    # 格式化输出
+    printf "%-10s %-10s %-15s %-20s %-s\n" \
+        "$proto" \
+        "$port" \
+        "$pid" \
+        "$iface" \
+        "Nginx"
+done
