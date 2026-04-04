@@ -1,0 +1,138 @@
+#!/bin/bash
+
+# 配置文件路径
+CONF="/etc/docker/daemon.json"
+DRY_RUN=false
+
+# 1. 参数预处理：检查并剥离 --dry-run
+args=()
+for arg in "$@"; do
+    if [[ "$arg" == "--dry-run" ]]; then
+        DRY_RUN=true
+    else
+        args+=("$arg")
+    fi
+done
+set -- "${args[@]}"
+
+# 2. 权限检查
+if [ "$EUID" -ne 0 ]; then
+    echo "错误: 修改或查看 $CONF 必须使用 sudo 运行。"
+    exit 1
+fi
+
+# 3. 文件存在性检查
+if [ ! -f "$CONF" ]; then
+    echo "错误: 配置文件 $CONF 不存在！"
+    exit 1
+fi
+
+# 4. 空文件初始化（确保 jq 能解析）
+if [ ! -s "$CONF" ]; then
+    echo "{}" > "$CONF"
+fi
+
+# --- 参数标准化函数 (别名逻辑) ---
+normalize_type() {
+    case "$1" in
+        i|insecure-registries)
+            echo "insecure-registries"
+            ;;
+        m|registry-mirrors)
+            echo "registry-mirrors"
+            ;;
+        *)
+            echo "$1" # 原样返回，交给后续逻辑报错
+            ;;
+    esac
+}
+
+# --- 核心保存函数 ---
+save_json() {
+    local new_content="$1"
+    if [ "$DRY_RUN" = true ]; then
+        echo "$new_content" | jq .
+    else
+        echo "$new_content" > "${CONF}.tmp" && mv "${CONF}.tmp" "$CONF"
+        echo "操作已成功写入 $CONF"
+    fi
+}
+
+# --- 功能函数 ---
+
+show_config() {
+    command -v jq &> /dev/null && jq . "$CONF" || cat "$CONF"
+}
+
+list_configs() {
+    local raw_type=$1
+    local type=$(normalize_type "$raw_type")
+    
+    echo "--- Docker 配置记录 ---"
+    printf "%-25s %-s\n" "TYPE" "VALUE"
+    echo "--------------------------------------------------------"
+
+    if [[ -n "$type" ]]; then
+        if [[ "$type" != "insecure-registries" && "$type" != "registry-mirrors" ]]; then
+            echo "错误: 无效类型 $raw_type (可用别名: i, m)"
+            return
+        fi
+        jq -r --arg t "$type" '.[$t][]? | "\($t)\t\(.)"' "$CONF" | column -t -s $'\t'
+    else
+        # 全量显示
+        jq -r '
+            (."insecure-registries"[]? | "insecure-registries\t\(.)"),
+            (."registry-mirrors"[]? | "registry-mirrors\t\(.)")
+        ' "$CONF" | column -t -s $'\t'
+    fi
+}
+
+add_config() {
+    local type=$(normalize_type "$1")
+    local value=$2
+    [[ -z "$value" ]] && { echo "错误: 值不能为空"; return; }
+    [[ "$type" != "insecure-registries" && "$type" != "registry-mirrors" ]] && { echo "错误: 无效类型"; return; }
+    
+    local result=$(jq ".[\"$type\"] |= (. // [] | (. + [\"$value\"] | unique))" "$CONF")
+    save_json "$result"
+}
+
+del_config() {
+    local type=$(normalize_type "$1")
+    local value=$2
+    [[ -z "$value" ]] && { echo "错误: 值不能为空"; return; }
+    [[ "$type" != "insecure-registries" && "$type" != "registry-mirrors" ]] && { echo "错误: 无效类型"; return; }
+
+    local result=$(jq ".[\"$type\"] |= (if . then map(select(. != \"$value\")) else [] end)" "$CONF")
+    save_json "$result"
+}
+
+clear_config() {
+    local type=$(normalize_type "$1")
+    if [[ "$type" != "insecure-registries" && "$type" != "registry-mirrors" ]]; then
+        echo "错误: 无效类型 (可用别名: i, m)"
+        return
+    fi
+    
+    local result=$(jq ".[\"$type\"] = []" "$CONF")
+    save_json "$result"
+}
+
+# --- 命令行逻辑 ---
+
+case "$1" in
+    show)  show_config ;;
+    list)  list_configs "$2" ;;
+    add)   add_config "$2" "$3" ;;
+    del)   del_config "$2" "$3" ;;
+    clear) clear_config "$2" ;;
+    *)
+        echo "用法: $0 {show|list|add|del|clear} [类型/别名] [值] [--dry-run]"
+        echo "别名说明: i = insecure-registries, m = registry-mirrors"
+        echo "------------------------------------------------"
+        echo "示例:"
+        echo "  $0 list m                        # 只列出镜像加速器"
+        echo "  $0 add i 192.168.1.100:5000      # 使用别名增加私有仓库"
+        echo "  $0 clear m --dry-run             # 预览清空镜像加速器"
+        ;;
+esac
