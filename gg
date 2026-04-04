@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+# 设置目标目录
+target_dir=~/.local/bin
+
+# 创建目标目录，如果不存在
+mkdir -p "$target_dir"
+
+# 遍历当前目录下的文件
+for file in *; do
+  # 检查文件是否可执行
+  # if [ -x "$file" ] ; then
+  if [[ -x "$file" && "$file" != "${0##*/}" ]]; then
+    # 复制文件到目标目录
+    cp -p --verbose --force "$file" "$target_dir"
+  fi
+done
