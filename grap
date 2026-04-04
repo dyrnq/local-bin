@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+
+# git rest and push
+commit="${commit:-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx}"
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --commit|-c)
+            commit="$2"
+            shift
+            ;;
+        --*)
+            echo "Illegal option $1"
+            ;;
+    esac
+    shift $(( $# > 0 ? 1 : 0 ))
+done
+
+echo "git reset --hard ${commit} && git push origin HEAD --force"
