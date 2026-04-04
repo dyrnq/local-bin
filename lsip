@@ -1,0 +1,61 @@
+#!/bin/bash
+
+# 检查是否安装了 jq
+if ! command -v jq &> /dev/null; then
+    echo "错误: 请安装 jq 工具 (yum/apt install jq)"
+    exit 1
+fi
+
+# 获取 ip -json 的输出
+IP_JSON=$(ip -json addr show)
+
+# 打印表头 (增加了 IP Address 列)
+printf "%-12s %-12s %-18s %-20s %-10s %-s\n" "Interface" "PCI Addr" "MAC Address" "IP Address" "State" "Model/Type"
+echo "------------------------------------------------------------------------------------------------------------------------------------------------------"
+
+# 遍历 ip addr 中的所有网卡接口
+echo "$IP_JSON" | jq -c '.[]' | while read -r link; do
+    # 1. 提取基础信息
+    ifname=$(echo "$link" | jq -r '.ifname')
+    mac_addr=$(echo "$link" | jq -r '.address // "N/A"')
+    oper_state=$(echo "$link" | jq -r '.operstate // "DOWN"')
+    
+    # 2. 提取所有 IP 地址 (IPv4 和 IPv6)，用逗号分隔
+    ip_addrs=$(echo "$link" | jq -r '.addr_info | map(.local) | join(", ")')
+    [ -z "$ip_addrs" ] && ip_addrs="None"
+
+    # 3. 区分物理与虚拟设备
+    dev_path=$(readlink -f "/sys/class/net/$ifname/device" 2>/dev/null)
+    
+    if [[ $dev_path == *"pci"* ]]; then
+        # 物理设备：提取 PCI BDF 地址并获取型号
+        pci_addr=$(basename "$dev_path")
+        pci_display=$(echo "$pci_addr" | sed 's/0000://')
+        model_name=$(lspci -s "$pci_addr" | cut -d':' -f3- | sed 's/^ //')
+    else
+        # 虚拟设备
+        pci_display="Virtual"
+        if [[ "$ifname" == "lo" ]]; then
+            model_name="Loopback Interface"
+        elif [ -d "/sys/class/net/$ifname/bridge" ]; then
+            model_name="Bridge Interface"
+        elif [[ "$ifname" == veth* ]]; then
+            model_name="veth (Container Pipe)"
+        elif [[ "$ifname" == docker* ]]; then
+            model_name="Docker Bridge"
+        else
+            # 从系统类型文件获取通用描述
+            type_id=$(cat "/sys/class/net/$ifname/type" 2>/dev/null)
+            model_name="Virtual (Type $type_id)"
+        fi
+    fi
+
+    # 4. 格式化输出 (IP 地址如果太长会被截断显示，printf 保持对齐)
+    printf "%-12s %-12s %-18s %-20.20s %-10s %-s\n" \
+        "$ifname" \
+        "$pci_display" \
+        "$mac_addr" \
+        "$ip_addrs" \
+        "[$oper_state]" \
+        "$model_name"
+done
