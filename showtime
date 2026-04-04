@@ -1,25 +1,37 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
+# 定义颜色以便区分表头
+BLUE='\033[0;34m'
+NC='\033[0m' # 无颜色
 
-date
-date +"%Y-%m-%d"
-date +"%H:%M:%S"
-date +"%s" # Unix 时间戳
-date +"%Y%m%d_%H%M%S"
-date +"%Y-%m-%d %H:%M:%S.%3N"
-date +"%Y-%m-%d %H:%M:%S.%N"
-date +%N
-date +"%F %T"
-date +%s%N # Unix 时间戳 + 纳秒。从 1970-01-01 00:00:00 UTC 至今的总纳秒数。
+echo -e "${BLUE}------------------------------------------------------------------------------------------------${NC}"
+printf "%-35s | %-30s | %-s\n" "命令 (Command)" "执行结果 (Result)" "说明 (Description)"
+echo -e "${BLUE}------------------------------------------------------------------------------------------------${NC}"
 
-date +"%Z %z" # timezone
+# 1. 基础输出
+printf "%-35s | %-30s | %-s\n" "date" "$(date)" "默认系统日期时间格式"
+printf "%-35s | %-30s | %-s\n" "date +\"%Y-%m-%d\"" "$(date +"%Y-%m-%d")" "标准日期 (YYYY-MM-DD)"
+printf "%-35s | %-30s | %-s\n" "date +\"%H:%M:%S\"" "$(date +"%H:%M:%S")" "标准时间 (HH:MM:SS)"
+printf "%-35s | %-30s | %-s\n" "date +\"%s\"" "$(date +"%s")" "Unix 时间戳 (秒)"
 
-# %F: 相当于 %Y-%m-%d (快速简写)
-# %T: 相当于 %H:%M:%S (快速简写)
+# 2. 格式化与精度
+printf "%-35s | %-30s | %-s\n" "date +\"%Y%m%d_%H%M%S\"" "$(date +"%Y%m%d_%H%M%S")" "紧凑格式 (常用于文件名)"
+printf "%-35s | %-30s | %-s\n" "date +\"%F %T\"" "$(date +"%F %T")" "%F-%T 快速简写组合"
+printf "%-35s | %-30s | %-s\n" "date +\"%...%3N\"" "$(date +"%Y-%m-%d %H:%M:%S.%3N")" "带毫秒的时间戳"
+printf "%-35s | %-30s | %-s\n" "date +\"%...%N\"" "$(date +"%Y-%m-%d %H:%M:%S.%N")" "带纳秒的时间戳"
+printf "%-35s | %-30s | %-s\n" "date +%N" "$(date +%N)" "当前秒内的纳秒偏移量"
+printf "%-35s | %-30s | %-s\n" "date +%s%N" "$(date +%s%N)" "19位 Unix 总纳秒戳"
 
-date --date "yesterday" +"%Y-%m-%d" # 昨天
-date --date "tomorrow" +"%Y-%m-%d"  # 明天
-date --date "next Monday" +"%Y-%m-%d" #下月
-if command -v ntpq; then
-    ntpq -pn
-fi
+# 3. 时区
+printf "%-35s | %-30s | %-s\n" "date +\"%Z %z\"" "$(date +"%Z %z")" "显示时区缩写及偏移量"
+
+# 4. 日期计算
+printf "%-35s | %-30s | %-s\n" "date -d \"yesterday\" +\"%F\"" "$(date --date "yesterday" +"%F")" "获取昨天的日期"
+printf "%-35s | %-30s | %-s\n" "date -d \"tomorrow\" +\"%F\"" "$(date --date "tomorrow" +"%F")" "获取明天的日期"
+printf "%-35s | %-30s | %-s\n" "date -d \"next Monday\" +\"%F\"" "$(date --date "next Monday" +"%F")" "获取下周一的日期"
+
+echo -e "${BLUE}------------------------------------------------------------------------------------------------${NC}"
+
+# if command -v ntpq; then
+#     ntpq -pn
+# fi
