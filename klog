@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+boot="${boot:-}"
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -b|--boot)
+            boot="$2"
+            shift
+            ;;
+        --*)
+            echo "Illegal option $1"
+            ;;
+    esac
+    shift $(( $# > 0 ? 1 : 0 ))
+done
+
+aria2c_opts_array=()
+if [ -n "${boot}" ] ; then
+    aria2c_opts_array+=("--boot ${boot}")
+fi
+
+journalctl -o short-full -k --no-pager ${aria2c_opts_array[*]}
