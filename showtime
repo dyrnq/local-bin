@@ -12,6 +12,7 @@ date +%N
 date +"%F %T"
 date +%s%N # Unix 时间戳 + 纳秒。从 1970-01-01 00:00:00 UTC 至今的总纳秒数。
 
+date +"%Z %z" # timezone
 
 # %F: 相当于 %Y-%m-%d (快速简写)
 # %T: 相当于 %H:%M:%S (快速简写)
