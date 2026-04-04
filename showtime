@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+
+
+date
+date +"%Y-%m-%d"
+date +"%H:%M:%S"
+date +"%s" # Unix 时间戳
+date +"%Y%m%d_%H%M%S"
+date +"%Y-%m-%d %H:%M:%S.%3N"
+date +"%Y-%m-%d %H:%M:%S.%N"
+date +%N
+date +"%F %T"
+date +%s%N # Unix 时间戳 + 纳秒。从 1970-01-01 00:00:00 UTC 至今的总纳秒数。
+
+
+# %F: 相当于 %Y-%m-%d (快速简写)
+# %T: 相当于 %H:%M:%S (快速简写)
+
+date --date "yesterday" +"%Y-%m-%d" # 昨天
+date --date "tomorrow" +"%Y-%m-%d"  # 明天
+date --date "next Monday" +"%Y-%m-%d" #下月
+if command -v ntpq; then
+    ntpq -pn
+fi
