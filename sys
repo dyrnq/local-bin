@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+
+
+systemd-analyze critical-chain
+systemd-analyze blame |cat
