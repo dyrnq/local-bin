@@ -1,0 +1,35 @@
+#!/bin/bash
+
+# 获取所有以太网控制器的 PCI 地址（例如 0a:00.0）
+devices=$(lspci | grep -i "Ethernet controller" | awk '{print $1}')
+
+# 打印表头
+printf "%-12s %-8s %-12s %-20s %-s\n" "PCI Addr" "Dec Bus" "Predict Name" "Interface Status" "Model Name"
+echo "------------------------------------------------------------------------------------------------------"
+
+for addr in $devices; do
+    # 提取 Bus 部分 (十六进制)
+    hex_bus=$(echo $addr | cut -d':' -f1)
+    # 提取 Slot 部分 (十六进制)
+    hex_slot=$(echo $addr | cut -d':' -f2 | cut -d'.' -f1)
+    
+    # 转换为十进制
+    dec_bus=$((16#$hex_bus))
+    dec_slot=$((16#$hex_slot))
+    
+    # 拼接预测的名字
+    predict_name="enp${dec_bus}s${dec_slot}"
+    
+    # 获取设备型号 (去掉前面的前缀，只保留型号描述)
+    model_name=$(lspci -s "$addr" | cut -d':' -f3- | sed 's/^ //')
+    
+    # 检查该名字在系统中是否真实存在
+    if ip link show "$predict_name" > /dev/null 2>&1; then
+        status="[ACTIVE/FOUND]"
+    else
+        status="[NOT FOUND]"
+    fi
+    
+    # 格式化输出
+    printf "%-12s %-8s %-12s %-20s %-s\n" "$addr" "$dec_bus" "$predict_name" "$status" "$model_name"
+done
