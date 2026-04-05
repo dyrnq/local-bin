@@ -1,0 +1,50 @@
+#!/bin/bash
+
+# cgroup 版本检测脚本
+# 支持：文件系统类型检查、挂载点检查、进程层级检查
+
+# 定义颜色
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+echo -e "${BLUE}=== 系统 cgroup 版本检测 ===${NC}"
+
+# 1. 检查 /sys/fs/cgroup 的文件系统类型 (最可靠)
+FS_TYPE=$(stat -fc %T /sys/fs/cgroup/)
+
+# 2. 检查当前进程的 cgroup 层次结构
+SELF_CGROUP=$(cat /proc/self/cgroup)
+
+# 3. 统计挂载点数量判断
+V1_MOUNTS=$(mount | grep -c "type cgroup ")
+V2_MOUNTS=$(mount | grep -c "type cgroup2")
+
+echo -e "1. 文件系统类型: ${YELLOW}$FS_TYPE${NC}"
+echo -e "2. v1 挂载点数量: ${YELLOW}$V1_MOUNTS${NC}"
+echo -e "3. v2 挂载点数量: ${YELLOW}$V2_MOUNTS${NC}"
+
+echo -e "\n${BLUE}--- 检测结论 ---${NC}"
+
+if [[ "$FS_TYPE" == "cgroup2fs" ]]; then
+    echo -e "当前系统运行模式: ${GREEN}cgroup v2 (Unified Hierarchy)${NC}"
+    echo -e "检测依据: /sys/fs/cgroup 类型为 cgroup2fs。"
+elif [[ "$FS_TYPE" == "tmpfs" ]]; then
+    if [[ "$V2_MOUNTS" -gt 0 ]]; then
+        echo -e "当前系统运行模式: ${GREEN}cgroup v1/v2 混合模式 (Hybrid)${NC}"
+        echo -e "说明: 默认层级为 v1，但已挂载部分 v2 控制器。"
+    else
+        echo -e "当前系统运行模式: ${GREEN}cgroup v1 (Legacy Hierarchy)${NC}"
+        echo -e "检测依据: /sys/fs/cgroup 类型为 tmpfs，且未发现 cgroup2 挂载。"
+    fi
+else
+    echo -e "${YELLOW}警告: 无法识别的文件系统类型。${NC}"
+fi
+
+echo -e "\n${BLUE}--- 进程层级参考 (/proc/self/cgroup) ---${NC}"
+if [[ "$SELF_CGROUP" == "0::/"* ]]; then
+    echo -e "特征: 符合 v2 标准 (0::/)"
+else
+    echo -e "特征: 符合 v1 标准 (包含多个控制器 ID)"
+fi
