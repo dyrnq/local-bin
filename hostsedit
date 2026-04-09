@@ -1,0 +1,142 @@
+#!/bin/bash
+
+# 配置文件路径
+CONF="/etc/hosts"
+DRY_RUN=false
+
+# 1. 参数预处理
+args=()
+for arg in "$@"; do
+    if [[ "$arg" == "--dry-run" ]]; then
+        DRY_RUN=true
+    else
+        args+=("$arg")
+    fi
+done
+set -- "${args[@]}"
+
+# --- 内部工具函数 ---
+
+check_privilege() {
+    if [ "$DRY_RUN" = false ] && [ "$EUID" -ne 0 ]; then
+        echo "错误: 该操作涉及修改 $CONF，必须使用 sudo 运行。"
+        exit 1
+    fi
+}
+
+save_hosts() {
+    local new_content="$1"
+    if [ "$DRY_RUN" = true ]; then
+        echo -e "\n--- [预览模式] 修改后的内容 ---"
+        echo "$new_content"
+    else
+        echo "$new_content" > "${CONF}.tmp" && mv "${CONF}.tmp" "$CONF"
+        echo "操作已成功写入 $CONF"
+    fi
+}
+
+# --- 功能函数 ---
+
+# 直接返回文件原始内容
+cat_config() {
+    cat "$CONF"
+}
+
+# 格式化查看所有非注释记录
+list_configs() {
+    echo "--- 当前 Hosts 记录 ---"
+    printf "%-20s %-s\n" "IP" "HOSTNAMES"
+    echo "--------------------------------------------------------"
+    grep -vE '^#|^$' "$CONF" | column -t
+}
+
+# 查找记录 (支持正则)
+query_config() {
+    local pattern=$1
+    [[ -z "$pattern" ]] && { echo "用法: query [IP或域名(支持正则)]"; return; }
+    
+    # 查找非注释行中匹配模式的内容
+    local res=$(grep -vE '^#' "$CONF" | grep -E "$pattern")
+    
+    if [[ -z "$res" ]]; then
+        echo "未找到匹配 '$pattern' 的记录。"
+    else
+        echo "$res" | column -t
+    fi
+}
+
+add_config() {
+    check_privilege
+    local ip=$1
+    local hostname=$2
+    [[ -z "$ip" || -z "$hostname" ]] && { echo "用法: add [IP] [主机名]"; return; }
+
+    if grep -vE '^#' "$CONF" | grep -E "^$ip\>" | grep -qFw "$hostname"; then
+        echo "提示: $ip 已经包含了主机名 $hostname，无需操作。"
+        return
+    fi
+
+    if grep -qE "^$ip\>" "$CONF"; then
+        local result=$(sed -E "/^$ip\>/ s/[[:space:]]*$/ $hostname/" "$CONF")
+        save_hosts "$result"
+    else
+        local result=$(cat "$CONF"; echo -e "$ip\t$hostname")
+        save_hosts "$result"
+    fi
+}
+
+del_logic() {
+    check_privilege
+    local ip=$1
+    local hostname=$2
+    
+    if [[ -z "$ip" ]]; then
+        echo "用法: del [IP] (删除整行) 或 del [IP] [主机名] (删除特定别名)"
+        return
+    fi
+
+    if [[ -z "$hostname" ]]; then
+        # 情况 A: 删除整行
+        if ! grep -qE "^$ip\>" "$CONF"; then
+            echo "错误: 未找到 IP 为 $ip 的记录。"
+            return
+        fi
+        local result=$(grep -vE "^$ip\>" "$CONF")
+        echo "操作：将删除 IP $ip 及其所有主机名。"
+        save_hosts "$result"
+    else
+        # 情况 B: 删除特定别名
+        if ! grep -vE '^#' "$CONF" | grep -E "^$ip\>" | grep -qFw "$hostname"; then
+            echo "错误: 在 IP $ip 下未找到主机名 $hostname"
+            return
+        fi
+
+        local escaped_hn=$(echo "$hostname" | sed 's/\./\\./g')
+        local result=$(sed -E "/^$ip\>/ { 
+            s/\<$escaped_hn\>//g; 
+            s/[[:space:]]{2,}/ /g; 
+            s/[[:space:]]+$//; 
+            /^([0-9.]+|[0-9a-fA-F:]+)[[:space:]]*$/d 
+        }" "$CONF")
+        save_hosts "$result"
+    fi
+}
+
+# --- 命令行逻辑 ---
+
+case "$1" in
+    cat)       cat_config ;;
+    list|show) list_configs ;;
+    query)     query_config "$2" ;;
+    add)       add_config "$2" "$3" ;;
+    del)       del_logic "$2" "$3" ;;
+    *)
+        echo "用法: $0 {cat|list|query|add|del} [参数] [--dry-run]"
+        echo "------------------------------------------------"
+        echo "示例:"
+        echo "  $0 query 192.168.6             # 查找 192.168.6 网段的所有记录"
+        echo "  $0 query '^127'                # 正则查找以 127 开头的 IP"
+        echo "  $0 query 'lo$'                 # 查找以 lo 结尾的主机名"
+        echo "  sudo $0 add 192.168.6.36 p.lo"
+        ;;
+esac
