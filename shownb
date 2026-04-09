@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+## find network neighborhood
+
+gateway=$(ip -json route | jq -r '.[] | select(.dst == "default") | .gateway')
+
+
+nmap -sn "${gateway}/24"
