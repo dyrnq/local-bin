@@ -1,0 +1,107 @@
+#!/usr/bin/env bash
+identity_file=${identity_file:-}
+identity_pass=${identity_pass:-}
+password=${password:-}
+username=${username:-root}
+host=${host:-127.0.0.1}
+port=${port:-22}
+# 暂存非选项参数的数组
+positional_args=()
+ssh_cmd=()
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --identity_file|-i)
+            identity_file="$2"; shift 2 ;;
+        --identity_pass|--i-pass|-i-pass)
+            identity_pass="$2"; shift 2 ;;
+        --password|--pass|-p)
+            password="$2"; shift 2 ;;
+        --username|--user|-u)
+            username="$2"; shift 2 ;;
+        --host|-h)
+            host="$2"; shift 2 ;;
+        --port|-port)
+            port="$2"; shift 2 ;;
+        -c|--|--command|-command|--cmd|--ssh-cmd|-cmd)
+            ssh_cmd+=("$2"); shift 2 ;;
+        --*|-*)
+            echo "Illegal option $1"; shift ;;
+        *)
+            positional_args+=("$1")
+            shift
+            ;;
+    esac
+done
+
+ssh_opts=()
+ssh_opts+=("-o StrictHostKeyChecking=no")
+ssh_opts+=("-o UserKnownHostsFile=/dev/null")
+ssh_opts+=("-o ServerAliveInterval=60")
+ssh_opts+=("-o ServerAliveCountMax=60")
+ssh_opts+=("-o TCPKeepAlive=yes")
+
+
+if [ ! "${port}" = "22" ];      then ssh_opts+=("-p ${port}");             fi
+if [ -n "${identity_file}" ];   then 
+    ssh_opts+=("-i ${identity_file}");
+    if [ -e "${identity_file}" ]; then
+        chmod 600 "${identity_file}";
+    else
+        echo "${identity_file} NOT FOUND!!"
+        exit 1;
+    fi
+fi
+# echo "${ssh_opts[*]}"
+
+run_ssh() {
+    local cmd_to_run="$1"
+    if [[ -n "${password}" || -n "${identity_pass}" ]]; then
+        # expect -c "
+        #     spawn ssh ${username}@${host} ${ssh_opts[@]} ${cmd_to_run}
+        #     expect {
+        #         \"*password:\" { send \"${password}\r\"; exp_continue }
+        #         \"yes/no\" { send \"yes\r\"; exp_continue }
+        #         eof
+        #     }
+        # "
+        expect -c "
+            log_user 0
+            set timeout 30
+            spawn ssh ${username}@${host} ${ssh_opts[*]} ${cmd_to_run}
+            expect {
+                \"*Enter passphrase for key*\" {
+                    send \"${identity_pass}\r\"
+                    log_user 1
+                    exp_continue
+                }
+                \"*password:\" {
+                    send \"${password}\r\"
+                    log_user 1
+                    exp_continue 
+                }
+                \"yes/no\" { 
+                    send \"yes\r\"
+                    exp_continue 
+                }
+                eof
+            }
+        "
+
+    else
+        ssh "${username}"@"${host}" ${ssh_opts[*]} ${cmd_to_run}
+    fi
+}
+
+
+if [[ ${#ssh_cmd[@]} -gt 0 ]]; then
+    for element_cmd in "${ssh_cmd[@]}"; do
+        run_ssh "${element_cmd}"
+    done
+else
+    run_ssh ""
+fi
+
+# ./sshe --user root -i identity_file   --host 192.168.1.130 -- "ps aux|grep java"
+# ./sshe --user root -i identity_file   --host 192.168.1.130 -- "ps aux|grep java" -i-pass <identity_pass>
+# ./sshe --user root --pass <pass>      --host 192.168.1.130 -- "ps aux|grep java"
+# ./sshe --user root --pass <pass>      --host 192.168.1.130 -- "ps aux|grep java" --port 2222
