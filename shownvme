@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+
+
+lspci -mmnn | grep -i nvme | awk '{print $1}' | xargs -r -I {} sh -c "lspci -vvs {}"
+
