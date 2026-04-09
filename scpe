@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+
+identity_file=${identity_file:-}
+identity_pass=${identity_pass:-}
+password=${password:-}
+username=${username:-root}
+host=${host:-127.0.0.1}
+port=${port:-22}
+# 存放源文件和目标路径
+positional_args=()
+
+# 1. 参数解析 (保留你 sshe 的逻辑)
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --identity_file|-i)
+            identity_file="$2"; shift 2 ;;
+        --identity_pass|--i-pass|-i-pass)
+            identity_pass="$2"; shift 2 ;;
+        --password|--pass|-p)
+            password="$2"; shift 2 ;;
+        --username|--user|-u)
+            username="$2"; shift 2 ;;
+        --host|-h)
+            host="$2"; shift 2 ;;
+        --port)
+            port="$2"; shift 2 ;;
+        --src)
+            src="$2"; shift 2 ;;
+        --dest)
+            dest="$2"; shift 2 ;;
+        --*|-*)
+            echo "Illegal option $1"; shift ;;
+        *)
+            positional_args+=("$1")
+            shift
+            ;;
+    esac
+done
+
+scp_opts=()
+scp_opts+=("-o" "StrictHostKeyChecking=no")
+scp_opts+=("-o" "UserKnownHostsFile=/dev/null")
+scp_opts+=("-o" "ServerAliveInterval=60")
+scp_opts+=("-o" "ServerAliveCountMax=60")
+if [ ! "${port}" = "22" ];
+    then ssh_opts+=("-P ${port}");
+fi
+
+if [ -n "${identity_file}" ]; then
+    if [ -e "${identity_file}" ]; then
+        chmod 600 "${identity_file}"
+        scp_opts+=("-i" "${identity_file}")
+    else
+        echo "错误: ${identity_file} 文件不存在!"
+        exit 1
+    fi
+fi
+
+run_scp() {
+if [[ -n "${password}" || -n "${identity_pass}" ]]; then
+    expect -c "
+        log_user 0
+        set timeout 600
+        spawn scp ${scp_opts[*]} ${src} ${dest}
+        expect {
+            \"*Enter passphrase for key*\" {
+                send \"${identity_pass}\r\"
+                log_user 1
+                exp_continue
+            }
+            \"*password:\" {
+                send \"${password}\r\"
+                log_user 1
+                exp_continue 
+            }
+            \"yes/no\" { 
+                send \"yes\r\"
+                exp_continue 
+            }
+            eof
+        }
+    "
+else
+    scp ${scp_opts[*]} "${src}" "${dest}"
+fi
+}
+
+
+
+run_scp
