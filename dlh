@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+
+proxy="${proxy:-}"
+noproxy="${noproxy:-}"
+out="${out:-}"
+url="${url:-}"
+HELP="${HELP:-}"
+
+# 暂存非选项参数的数组
+positional_args=()
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --proxy|-x)
+            proxy="$2"; shift 2 ;;
+        --noproxy|--no-proxy)
+            noproxy="$2"; shift 2 ;;
+        --out|-o)
+            out="$2"; shift 2 ;;
+        --help|-h)
+            HELP=1; shift ;;
+        --url|-fSL|"-f#SL") # 兼容你原来的显性参数
+            url="$2"; shift 2 ;;
+        --*)
+            echo "Illegal option $1"; shift ;;
+        -*)
+            # 处理可能的合并短参数或其他未知短参数
+            echo "Unknown option $1"; shift ;;
+        *)
+            # 【核心逻辑】如果不以 - 开头，则视为位置参数（URL）
+            positional_args+=("$1")
+            shift
+            ;;
+    esac
+done
+
+# 如果 url 变量仍然为空，则从位置参数中提取第一个
+if [ -z "${url}" ] && [ ${#positional_args[@]} -gt 0 ]; then
+    url="${positional_args[0]}"
+fi
+
+# 帮助信息
+if [ "$HELP" = "1" ] || [ -z "${url}" ]; then
+    echo "Usage: dlh [options] <url>"
+    echo "--proxy|-x            proxy"
+    echo "--noproxy             noproxy"
+    echo "--out|-o              outputfile"
+    echo "--url                 explicit url"
+    echo "Example:"
+    echo "  dlh https://example.com/file.img"
+    echo "  dlh -o test.img https://example.com/file.img"
+    echo "  dlh --proxy http://127.0.0.1:7890 https://example.com/file.img"
+    exit 0
+fi
+
+# 组装 aria2c 参数
+aria2c_opts_array=()
+[ -n "${proxy}" ]       && aria2c_opts_array+=("--proxy ${proxy}")
+
+#[ -n "${noproxy}" ]     && aria2c_opts_array+=("--no-proxy=${noproxy}")
+
+
+if [ -n "${out}" ]; then
+    aria2c_opts_array+=("-o" "${out}")
+    aria2c_opts_array+=("--continue")
+fi
+
+
+set -x
+http "${aria2c_opts_array[@]}" \
+--download \
+--follow \
+"${url}"
+
+# dl https://mirrors.ustc.edu.cn/ubuntu-cloud-images/noble/current/noble-server-cloudimg-amd64.img
+# http -d https://mirrors.ustc.edu.cn/ubuntu-cloud-images/noble/current/noble-server-cloudimg-amd64.img
+# http -d --follow --continue --output jammy-server-cloudimg-amd64.img https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img
+# http --proxy x --continue --output
